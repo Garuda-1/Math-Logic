@@ -1,9 +1,12 @@
 all:
-	mkdir build
+	mkdir -p build
 	cd build
-	alex ../lex.x
-	happy ../parser.y
-	ghc lex.hs parser.hs
+	alex lex.x -o build/lex.hs
+	happy parser.y -o build/parser.hs
+	ghc build/lex.hs build/parser.hs -o build/parser
 
 run:
 	build/parser
+
+zip:
+	zip task1.zip lex.x parser.y Makefile

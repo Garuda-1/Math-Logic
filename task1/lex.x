@@ -6,17 +6,17 @@ module Lex where
 
 $digit = 0-9
 $alpha = A-Z
-$aph = ’
+$aph = \'
 
 tokens :-
 
   $white ;
   \-\>                          { \s -> TokenImply }
-  \|                             { \s -> TokenDisj }
+  \|                            { \s -> TokenDisj }
   &                             { \s -> TokenConj }
   !                             { \s -> TokenNegate }
-  \(                             { \s -> TokenLBrace }
-  \)                             { \s -> TokenRBrace }
+  \(                            { \s -> TokenLBrace }
+  \)                            { \s -> TokenRBrace }
   $alpha [$alpha $digit $aph]*  { \s -> TokenVar s }
 
 {
