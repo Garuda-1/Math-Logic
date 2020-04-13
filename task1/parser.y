@@ -1,7 +1,7 @@
 {
 module Main where
 
-import Data.Char
+import Lex
 }
 
 %name calc
@@ -70,7 +70,7 @@ instance Show Neg where
   show (NVar s) = s
   show (NBrackets x) = show x
 
-data Token
+{--data Token
   = TokenImply
   | TokenDisj
   | TokenConj
@@ -83,7 +83,7 @@ data Token
 lexer :: String -> [Token]
 lexer [] = []
 lexer (c : cs)
-  | (isSpace c) = lexer cs
+  | (isSpace c || c == '\t' || c == '\n' || c == '\r') = lexer cs
   | (isAlpha c) = TokenVar parsed : (lexer rest) where
       helper :: String -> String -> (String, String)
       helper acc [] = (acc, [])
@@ -99,9 +99,9 @@ lexer ('|' : cs) = TokenDisj : lexer cs
 lexer ('&' : cs) = TokenConj : lexer cs
 lexer ('!' : cs) = TokenNegate : lexer cs
 lexer ('(' : cs) = TokenLBrace : lexer cs
-lexer (')' : cs) = TokenRBrace : lexer cs
+lexer (')' : cs) = TokenRBrace : lexer cs--}
 
-main = getLine >>= print . calc . lexer
+main = getLine >>= print . calc . alexScanTokens
 }
 
 

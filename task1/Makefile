@@ -1,5 +1,9 @@
-all: parser
-	ghc parser.hs
+all:
+	mkdir build
+	cd build
+	alex ../lex.x
+	happy ../parser.y
+	ghc lex.hs parser.hs
 
 run:
-	./parser
+	build/parser
