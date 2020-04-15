@@ -1,12 +1,11 @@
 all:
-	mkdir -p build
 	cd build
 	alex lex.x -o build/lex.hs
 	happy parser.y -o build/parser.hs
-	ghc build/lex.hs build/parser.hs utils.hs -odir build -o simplifier
+	ghc build/lex.hs build/parser.hs utils.hs -odir build -hidir ifaces -o simplifier
 
 run:
-	build/simplifier
+	./simplifier
 
 zip:
 	zip task1.zip lex.x parser.y utils.hs Makefile
