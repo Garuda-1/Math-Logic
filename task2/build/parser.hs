@@ -248,16 +248,14 @@ data Exp
   | EConj Exp Exp
   | ENeg Exp
   | EVar String
-  deriving (Show, Eq)
+  deriving (Eq)
 
-{-
 instance Show Exp where
-  show (EImpl x y) = "(->," ++ (show x) ++ "," ++ (show y) ++ ")"
-  show (EDisj x y) = "(|," ++ (show x) ++ "," ++ (show y) ++ ")"
-  show (EConj x y) = "(&," ++ (show x) ++ "," ++ (show y) ++ ")"
-  show (ENeg x) = "(!" ++ (show x) ++ ")"
+  show (EImpl x y) = "(" ++ (show x) ++ " -> " ++ (show y) ++ ")"
+  show (EDisj x y) = "(" ++ (show x) ++ " | " ++ (show y) ++ ")"
+  show (EConj x y) = "(" ++ (show x) ++ " & " ++ (show y) ++ ")"
+  show (ENeg x) = "!" ++ (show x)
   show (EVar s) = s
--}
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "<built-in>" #-}

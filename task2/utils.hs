@@ -113,7 +113,7 @@ buildDependencies ((Node index exp) : exps) assumptions =
       let
         ((Node i1 _), (Node i2 _)) = head mps
       in
-        Just ((i, (i1, i2)) : deps)
+        Just ((i, (i2, i1)) : deps)
   in
     if (isLeaf (Node index exp) assumptions) then
       buildDependencies exps assumptions
@@ -171,41 +171,77 @@ pickNecessary index ((Node i exp) : nodes) deps =
     
     
 
-reorderingMaps :: [Node] -> (ReorderMap, ReorderMap)
+reorderingMaps :: [Node] -> ReorderMap
 reorderingMaps nodes =
   let
-    helper :: Int -> [Node] -> (ReorderMap, ReorderMap)
-    helper _ [] = ([], [])
+    helper :: Int -> [Node] -> ReorderMap
+    helper _ [] = []
     helper n ((Node i _) : nodes) =
       let
-        (old2new, new2old) = helper (n + 1) nodes
+        old2new = helper (n + 1) nodes
       in
-        ((i, n) : old2new, (n, i) : new2old)
+        (i, n) : old2new
   in
     helper 1 nodes
     
     
     
-toAnnotatedProof :: [Node] -> DependencyMap -> ReorderMap -> ReorderMap -> [String]
+toAnnotatedProof :: [Node] -> [Exp] -> DependencyMap -> ReorderMap -> [String]
 toAnnotatedProof [] _ _ _ = []
-toAnnotatedProof (Node index exp) deps old2new new2old =
+toAnnotatedProof ((Node index exp) : nodes) assumptions deps old2new =
   let
-    newIndex = lookup index old2new
+    newIndex = case (lookup index old2new) of
+      Just i -> i
+      Nothing -> error "New index not found"
     
     axString :: Int -> String
-    axString i = "[" ++ (show newIndex) ++ ". Ax. sch. " ++ i ++ "] " ++ (show exp)
+    axString i = "[" ++ (show newIndex) ++ ". Ax. sch. " ++ (show i) ++ "] "
+      ++ (show exp)
     
     mpString :: Int -> Int -> String
     mpString i1 i2 = "[" ++ (show newIndex) ++ ". M.P. " ++ (show i1) ++ ", "
       ++ (show i2) ++ "] " ++ (show exp)
+      
+    assumptionString :: Int -> String
+    assumptionString i = "[" ++ (show newIndex) ++ ". Hypothesis " ++ (show i)
+      ++ "] " ++ (show exp)
+      
     
-    helper :: String =
+    helper :: String
+    helper =
       case (lookup index deps) of
-        Just (i1, i2) -> mpString i1 i2
+        Just (i1, i2) -> case (lookup i1 old2new) of
+          Just ni1 -> case (lookup i2 old2new) of
+            Just ni2 -> mpString ni1 ni2
+            Nothing -> error "M.P. dependency index not found"
+          Nothing -> error "M.P. dependency index not found"   
         Nothing ->
           if (isAx1 exp) then
+            axString 1
+          else if (isAx2 exp) then
+            axString 2
+          else if (isAx3 exp) then
+            axString 3
+          else if (isAx4 exp) then
+            axString 4
+          else if (isAx5 exp) then
+            axString 5
+          else if (isAx6 exp) then
+            axString 6
+          else if (isAx7 exp) then
+            axString 7
+          else if (isAx8 exp) then
+            axString 8
+          else if (isAx9 exp) then
+            axString 9
+          else if (isAx10 exp) then
+            axString 10
+          else
+            case (elemIndex exp assumptions) of
+              Just i -> assumptionString (i + 1)
+              Nothing -> error "Assumption not found"
   in
-    
+    helper : (toAnnotatedProof nodes assumptions deps old2new)
     
 
 
@@ -214,20 +250,22 @@ main = do
   linesStr <- readLinesList
   let header = breakHeader headerStr
   let nodes = reverse $ annotateSrc $ map (calc . alexScanTokens) linesStr
+  let assumptions = fst header
+  let target = snd header
   case (buildDependencies nodes (fst $ header)) of
     Nothing -> do
-      print "Proof is incorrect"
-    (Just map) -> do
+      putStrLn "Proof is incorrect"
+    (Just deps) -> do
       if ((getExp $ head nodes) /= (snd header)) then
-        print "Proof is incorrect"
+        putStrLn "Proof is incorrect"
       else do
-        --print header
-        --print lines
-        --print $ show header
-        --print $ show lines
-        --print $ map
-       print nodes
-       print $ length nodes
-       print $ lookup 8 map
-       print $ sortOn (getIndex) $ pickNecessary (length nodes) (nodes) map
+        let minimized = sortOn (getIndex) $ pickNecessary (length nodes) (nodes) deps
+        let old2new = reorderingMaps minimized
+        putStr $ intercalate ", " (map (show) assumptions)
+        if (null assumptions) then
+          putStr "|- "
+        else
+          putStr " |- "
+        putStrLn (show target)
+        mapM_ (putStrLn) $ toAnnotatedProof minimized assumptions deps old2new
 
