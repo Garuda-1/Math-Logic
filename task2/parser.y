@@ -42,7 +42,7 @@ data Exp
   | EConj Exp Exp
   | ENeg Exp
   | EVar String
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 instance Show Exp where
   show (EImpl x y) = "(" ++ (show x) ++ " -> " ++ (show y) ++ ")"
