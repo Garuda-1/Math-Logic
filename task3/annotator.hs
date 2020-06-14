@@ -485,22 +485,22 @@ annotate nodes =
                     Just (i1, i2) -> 
                       Right $ "[" ++ show index ++ ". M.P. " ++ show i2 ++
                         ", " ++ show i1 ++ "] " ++ show exp
-                    Nothing -> checkArithmAx11
+                    Nothing -> checkArithmAx12
                               
-        checkArithmAx11 :: Either String String
-        checkArithmAx11 =  
-          case (lookupForallInjection) of
+        checkArithmAx12 :: Either String String
+        checkArithmAx12 =  
+          case (lookupForanyInjection) of
             Right (Node pindex _) -> 
               if (pindex == getIndex Main.null) then
-                checkArithmAx12
+                checkArithmAx11
               else
                 Right $ "[" ++ show index ++ ". ?@-intro " ++ show pindex ++ 
                   "] " ++ show exp
             Left _ -> Left findError
 
-        checkArithmAx12 :: Either String String
-        checkArithmAx12 =  
-          case (lookupForanyInjection) of
+        checkArithmAx11 :: Either String String
+        checkArithmAx11 =  
+          case (lookupForallInjection) of
             Right (Node pindex _) -> 
               if (pindex == getIndex Main.null) then
                 Left findError
