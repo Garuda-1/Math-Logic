@@ -9,23 +9,6 @@ import qualified Data.Set as Set
 
 
 
-isVarFree :: Exp -> Exp -> Bool
-isVarFree (EImpl x y) v = (isVarFree x v) || (isVarFree y v)
-isVarFree (EDisj x y) v = (isVarFree x v) || (isVarFree y v)
-isVarFree (EConj x y) v = (isVarFree x v) || (isVarFree y v)
-isVarFree (ENeg x) v = isVarFree x v
-isVarFree (EForall (EVar v1) x) (EVar v2) = if (v1 == v2) then False else isVarFree x (EVar v2)
-isVarFree (EForany (EVar v1) x) (EVar v2) = if (v1 == v2) then False else isVarFree x (EVar v2)
-isVarFree (EVar v1) (EVar v2) = v1 == v2
-isVarFree (EPred x) v = False
-isVarFree (EEq x y) v = (isVarFree x v) || (isVarFree y v)
-isVarFree (EAdd x y) v = (isVarFree x v) || (isVarFree y v)
-isVarFree (EMul x y) v = (isVarFree x v) || (isVarFree y v)
-isVarFree (EZero) v = False
-isVarFree (EInc x) v = isVarFree x v
-
-
-
 gatherFreeVars :: Exp -> Set.Set String -> Set.Set String
 gatherFreeVars (EImpl x y) s =
   Set.union (gatherFreeVars x s) (gatherFreeVars y s)
@@ -41,7 +24,8 @@ gatherFreeVars (EForany (EVar v1) x) s =
   gatherFreeVars x (Set.insert v1 s) 
 gatherFreeVars (EVar v1) s =
   if (Set.member v1 s) then Set.empty else Set.singleton v1
-gatherFreeVars (EPred x) s = Set.empty
+gatherFreeVars (EPred x) s = 
+  Set.empty
 gatherFreeVars (EEq x y) s =
   Set.union (gatherFreeVars x s) (gatherFreeVars y s)
 gatherFreeVars (EAdd x y) s =
@@ -54,7 +38,7 @@ gatherFreeVars (EInc x) s =
   gatherFreeVars x s
 
 
--- LEFT -- error
+
 substituteFree :: String -> Exp -> Exp -> Set.Set String -> Set.Set String -> 
   Either Exp Exp
 substituteFree v (EImpl x y) theta free s =
@@ -123,140 +107,135 @@ substituteFree v (EInc x) theta free s =
 
 
 
-gatherThetas :: String -> Exp -> Exp -> Maybe (Set.Set Exp)
-gatherThetas s (EImpl x1 y1) (EImpl x2 y2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas :: String -> Exp -> Exp -> Set.Set String -> Maybe (Set.Set Exp)
+gatherThetas s (EImpl x1 y1) (EImpl x2 y2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
-    Just thetas1 -> case (gatherThetas s y1 y2) of
+    Just thetas1 -> case (gatherThetas s y1 y2 locked) of
       Nothing -> Nothing
       Just thetas2 -> Just (Set.union thetas1 thetas2)
-gatherThetas s (EDisj x1 y1) (EDisj x2 y2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (EDisj x1 y1) (EDisj x2 y2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
-    Just thetas1 -> case (gatherThetas s y1 y2) of
+    Just thetas1 -> case (gatherThetas s y1 y2 locked) of
       Nothing -> Nothing
       Just thetas2 -> Just (Set.union thetas1 thetas2)
-gatherThetas s (EConj x1 y1) (EConj x2 y2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (EConj x1 y1) (EConj x2 y2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
-    Just thetas1 -> case (gatherThetas s y1 y2) of
+    Just thetas1 -> case (gatherThetas s y1 y2 locked) of
       Nothing -> Nothing
       Just thetas2 -> Just (Set.union thetas1 thetas2)
-gatherThetas s (ENeg x1) (ENeg x2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (ENeg x1) (ENeg x2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
     Just thetas -> Just thetas
-gatherThetas s (EForall (EVar s1) x1) (EForall v2 x2) =
-  if (s1 == s) then 
-    Just Set.empty 
-  else 
-    case (gatherThetas s x1 x2) of
+gatherThetas s (EForall (EVar s1) x1) (EForall (EVar s2) x2) locked =
+  if (s1 /= s2) then
+    Nothing
+  else
+    case (gatherThetas s x1 x2 (Set.insert s1 locked)) of
       Nothing -> Nothing
       Just thetas -> Just thetas
-gatherThetas s (EForany (EVar s1) x1) (EForany v2 x2) =
-  if (s1 == s) then
-    Just Set.empty
-  else 
-    case (gatherThetas s x1 x2) of
+gatherThetas s (EForany (EVar s1) x1) (EForany (EVar s2) x2) locked =
+  if (s1 /= s2) then
+    Nothing
+  else
+    case (gatherThetas s x1 x2 (Set.insert s1 locked)) of
       Nothing -> Nothing
       Just thetas -> Just thetas
-gatherThetas s (EVar s1) e =
-  if (s == s1) then Just (Set.singleton e) else Just Set.empty
-gatherThetas s (EPred x1) (EPred x2) =
+gatherThetas s (EVar s1) e locked =
+  if (not (Set.member s1 locked) && s == s1) then 
+    Just (Set.singleton e) 
+  else 
+    case e of
+      (EVar s2) -> if (s1 == s2) then Just Set.empty else Nothing
+      _ -> Nothing
+gatherThetas s (EPred x1) (EPred x2) locked =
   Just Set.empty
-gatherThetas s (EEq x1 y1) (EEq x2 y2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (EEq x1 y1) (EEq x2 y2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
-    Just thetas1 -> case (gatherThetas s y1 y2) of
+    Just thetas1 -> case (gatherThetas s y1 y2 locked) of
       Nothing -> Nothing
       Just thetas2 -> Just (Set.union thetas1 thetas2)
-gatherThetas s (EAdd x1 y1) (EAdd x2 y2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (EAdd x1 y1) (EAdd x2 y2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
-    Just thetas1 -> case (gatherThetas s y1 y2) of
+    Just thetas1 -> case (gatherThetas s y1 y2 locked) of
       Nothing -> Nothing
       Just thetas2 -> Just (Set.union thetas1 thetas2)
-gatherThetas s (EMul x1 y1) (EMul x2 y2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (EMul x1 y1) (EMul x2 y2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
-    Just thetas1 -> case (gatherThetas s y1 y2) of
+    Just thetas1 -> case (gatherThetas s y1 y2 locked) of
       Nothing -> Nothing
       Just thetas2 -> Just (Set.union thetas1 thetas2)
-gatherThetas s EZero EZero =
+gatherThetas s EZero EZero locked =
   Just Set.empty
-gatherThetas s (EInc x1) (EInc x2) =
-  case (gatherThetas s x1 x2) of
+gatherThetas s (EInc x1) (EInc x2) locked =
+  case (gatherThetas s x1 x2 locked) of
     Nothing -> Nothing
     Just thetas -> Just thetas
-gatherThetas s e1 e2 =
+gatherThetas s e1 e2 locked= 
   Nothing
 
 
 
 isPredAx1 :: Exp -> Bool
-isPredAx1 (EImpl a0 (EImpl b1 a1))
-  | (a0 == a1) = True
-  | otherwise = False
+isPredAx1 (EImpl a0 (EImpl b1 a1)) =
+  (a0 == a1)
 isPredAx1 _ = False
 
 isPredAx2 :: Exp -> Bool
-isPredAx2 (EImpl (EImpl a0 b0) (EImpl (EImpl a1 (EImpl b1 c1)) (EImpl a2 c2)))
-  | a0 == a1 && a1 == a2 && b0 == b1 && c1 == c2 = True
-  | otherwise = False
+isPredAx2 (EImpl (EImpl a0 b0) (EImpl (EImpl a1 (EImpl b1 c1)) (EImpl a2 c2))) =
+  a0 == a1 && a1 == a2 && b0 == b1 && c1 == c2
 isPredAx2 _ = False
 
 isPredAx3 :: Exp -> Bool
-isPredAx3 (EImpl (EConj a0 b0) a1)
-  | a0 == a1 = True
-  | otherwise = False
+isPredAx3 (EImpl (EConj a0 b0) a1) =
+  a0 == a1
 isPredAx3 _ = False
 
 isPredAx4 :: Exp -> Bool
-isPredAx4 (EImpl (EConj a0 b0) b1)
-  | b0 == b1 = True
-  | otherwise = False
+isPredAx4 (EImpl (EConj a0 b0) b1) =
+  b0 == b1
 isPredAx4 _ = False
 
 isPredAx5 :: Exp -> Bool
-isPredAx5 (EImpl a0 (EImpl b0 (EConj a1 b1)))
-  | a0 == a1 && b0 == b1 = True
-  | otherwise = False
+isPredAx5 (EImpl a0 (EImpl b0 (EConj a1 b1))) =
+  a0 == a1 && b0 == b1
 isPredAx5 _ = False
 
 isPredAx6 :: Exp -> Bool
-isPredAx6 (EImpl a0 (EDisj a1 b1))
-  | a0 == a1 = True
-  | otherwise = False
+isPredAx6 (EImpl a0 (EDisj a1 b1)) =
+  a0 == a1
 isPredAx6 _ = False
 
 isPredAx7 :: Exp -> Bool
-isPredAx7 (EImpl b0 (EDisj a1 b1))
-  | b0 == b1 = True
-  | otherwise = False
+isPredAx7 (EImpl b0 (EDisj a1 b1)) =
+  b0 == b1
 isPredAx7 _ = False
 
 isPredAx8 :: Exp -> Bool
-isPredAx8 (EImpl (EImpl a0 c0) (EImpl (EImpl b1 c1) (EImpl (EDisj a2 b2) c2)))
-  | a0 == a2 && b1 == b2 && c0 == c1 && c1 == c2 = True
-  | otherwise = False
+isPredAx8 (EImpl (EImpl a0 c0) (EImpl (EImpl b1 c1) (EImpl (EDisj a2 b2) c2))) =
+  a0 == a2 && b1 == b2 && c0 == c1 && c1 == c2
 isPredAx8 _ = False
 
 isPredAx9 :: Exp -> Bool
-isPredAx9 (EImpl (EImpl a0 b0) (EImpl (EImpl a1 (ENeg b1)) (ENeg a2)))
-  | a0 == a1 && b0 == b1 && a1 == a2 = True
-  | otherwise = False
+isPredAx9 (EImpl (EImpl a0 b0) (EImpl (EImpl a1 (ENeg b1)) (ENeg a2))) =
+  a0 == a1 && b0 == b1 && a1 == a2
 isPredAx9 _ = False 
 
 isPredAx10 :: Exp -> Bool
-isPredAx10 (EImpl (ENeg (ENeg a0)) a1)
-  | a0 == a1 = True
-  | otherwise = False
+isPredAx10 (EImpl (ENeg (ENeg a0)) a1) =
+  a0 == a1
 isPredAx10 _ = False
 
 isPredAx11 :: Exp -> Either String Bool
 isPredAx11 (EImpl (EForall (EVar v) x) y) =
   do
-    let maybeThetas = gatherThetas v x y
+    let maybeThetas = gatherThetas v x y Set.empty
     case (maybeThetas) of
       Nothing -> Right False
       Just thetas ->
@@ -276,7 +255,7 @@ isPredAx11 _ = Right False
 isPredAx12 :: Exp -> Either String Bool
 isPredAx12 (EImpl x (EForany (EVar v) y)) =
   do
-    let maybeThetas = gatherThetas v y x
+    let maybeThetas = gatherThetas v y x Set.empty
     case (maybeThetas) of
       Nothing -> Right False
       Just thetas ->
@@ -367,10 +346,14 @@ isForanyInjection _ _ = Right False
 
 
 
-data Node = Node { getIndex :: Int, getExp :: Exp} deriving (Show, Ord)
+data Node = Node { getIndex :: Int, getExp :: Exp} deriving (Show)
 
 instance Eq Node where
   (Node _ e1) == (Node _ e2) = e1 == e2
+
+instance Ord Node where
+  (Node _ e1) < (Node _ e2) = e1 < e2
+  (Node _ e1) <= (Node _ e2) = e1 <= e2
 
 null :: Node
 null = Node (-1) EZero
@@ -389,6 +372,17 @@ annotate :: [Node] -> Either [String] [String]
 annotate [] = Right []
 annotate nodes =
   let 
+    safeInsert :: Exp -> (Int, Int) -> DependencyMap -> DependencyMap
+    safeInsert exp (pindex, index) mapMP =
+      case (Map.lookup exp mapMP) of
+        Just (index0, pindex0) ->
+          if (index0 < index || (index0 == index && pindex0 < pindex)) then
+            (Map.insert exp (index, pindex) mapMP)
+          else
+            mapMP
+        Nothing ->
+          (Map.insert exp (index, pindex) mapMP)
+
     nextPackImpl :: Node -> Pack -> Pack
     nextPackImpl (Node index exp) (Pack prev mapImpl mapMP) =
       let
@@ -402,12 +396,10 @@ annotate nodes =
                 Nothing -> Map.insert a (Set.singleton (Node index exp)) mapImpl
             in
               case (Map.lookup a prev) of
-                Just pindex -> (Pack 
-                  newPrev 
-                  newMapImpl 
-                  (Map.insert b (index, pindex) mapMP))
+                Just pindex -> 
+                  Pack newPrev newMapImpl (safeInsert b (index, pindex) mapMP)
                 Nothing -> (Pack newPrev newMapImpl mapMP)
-          _ -> (Pack newPrev mapImpl mapMP)
+          _ -> Pack newPrev mapImpl mapMP
           
     nextPackExp :: Node -> Pack -> Pack
     nextPackExp (Node index exp) (Pack prev mapImpl mapMP) =
@@ -415,11 +407,11 @@ annotate nodes =
         Just set ->
           let
             newMapMP = Set.foldr' 
-              (\(Node pindex (EImpl exp texp)) s -> Map.insert texp (pindex, index) s)
+              (\(Node pindex (EImpl exp texp)) s -> safeInsert texp (pindex, index) s)
               mapMP set
           in
             Pack prev mapImpl newMapMP
-        _ -> Pack prev mapImpl mapMP
+        Nothing -> Pack prev mapImpl mapMP
         
     nextPack :: Node -> Pack -> Pack
     nextPack node pack = nextPackExp node $ nextPackImpl node pack          
@@ -454,52 +446,60 @@ annotate nodes =
           else if (isPredAx10 exp) then
             Right $ "[" ++ show index ++ ". Ax. sch. 10] " ++ show exp
           else case (isPredAx11 exp) of
-            Left err -> Left findError
+            Left err -> curLine1
             Right res ->
               if (res) then
                 Right $ "[" ++ show index ++ ". Ax. sch. 11] " ++ show exp
-              else case (isPredAx12 exp) of
-                Left err -> Left findError
+              else curLine1
+                
+        curLine1 :: Either String String
+        curLine1 =
+          case (isPredAx12 exp) of
+                Left err -> curLine2
                 Right res ->
                   if (res) then
                     Right $ "[" ++ show index ++ ". Ax. sch. 12] " ++ show exp
-                  else if (isArithmAx1 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A1] " ++ show exp
-                  else if (isArithmAx2 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A2] " ++ show exp
-                  else if (isArithmAx3 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A3] " ++ show exp
-                  else if (isArithmAx4 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A4] " ++ show exp
-                  else if (isArithmAx5 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A5] " ++ show exp
-                  else if (isArithmAx6 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A6] " ++ show exp
-                  else if (isArithmAx7 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A7] " ++ show exp
-                  else if (isArithmAx8 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. A8] " ++ show exp
-                  else if (isArithmAx9 exp) then
-                    Right $ "[" ++ show index ++ ". Ax. sch. A9] " ++ show exp
-                  else case (Map.lookup exp (getMapMP newPack)) of
-                    Just (i1, i2) -> 
-                      Right $ "[" ++ show index ++ ". M.P. " ++ show i2 ++
-                        ", " ++ show i1 ++ "] " ++ show exp
-                    Nothing -> checkArithmAx12
+                  else curLine2
+
+        curLine2 :: Either String String
+        curLine2 = 
+          if (isArithmAx9 exp) then
+            Right $ "[" ++ show index ++ ". Ax. sch. A9] " ++ show exp
+          else if (isArithmAx1 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A1] " ++ show exp
+          else if (isArithmAx2 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A2] " ++ show exp
+          else if (isArithmAx3 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A3] " ++ show exp
+          else if (isArithmAx4 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A4] " ++ show exp
+          else if (isArithmAx5 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A5] " ++ show exp
+          else if (isArithmAx6 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A6] " ++ show exp
+          else if (isArithmAx7 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A7] " ++ show exp
+          else if (isArithmAx8 exp) then
+            Right $ "[" ++ show index ++ ". Ax. A8] " ++ show exp
+          else case (Map.lookup exp (getMapMP newPack)) of
+            Just (i1, i2) -> 
+              Right $ "[" ++ show index ++ ". M.P. " ++ show i1 ++
+                ", " ++ show i2 ++ "] " ++ show exp
+            Nothing -> checkForanyInjection
                               
-        checkArithmAx12 :: Either String String
-        checkArithmAx12 =  
+        checkForanyInjection :: Either String String
+        checkForanyInjection =  
           case (lookupForanyInjection) of
             Right (Node pindex _) -> 
               if (pindex == getIndex Main.null) then
-                checkArithmAx11
+                checkForallInjection
               else
                 Right $ "[" ++ show index ++ ". ?@-intro " ++ show pindex ++ 
                   "] " ++ show exp
-            Left _ -> Left findError
+            Left _ -> checkForallInjection
 
-        checkArithmAx11 :: Either String String
-        checkArithmAx11 =  
+        checkForallInjection :: Either String String
+        checkForallInjection =  
           case (lookupForallInjection) of
             Right (Node pindex _) -> 
               if (pindex == getIndex Main.null) then
@@ -525,7 +525,7 @@ annotate nodes =
             _ -> Right Main.null
 
         lookupForanyInjection :: Either String Node
-        lookupForanyInjection =
+        lookupForanyInjection = 
           case (exp) of
             (EImpl (EForany (EVar v) x) y) ->
               case (Map.lookup (EImpl x y) (getPrev newPack)) of
@@ -571,6 +571,17 @@ createNodes lines =
   in
     helper 1 lines
 
+proof2 :: Exp -> [Node] -> Either [String] [String] -> [String]
+proof2 target nodes proof =
+  case (proof) of
+    Left lines ->
+      lines
+    Right lines ->
+      if (Data.List.null nodes || (getExp (last nodes) /= target)) then do
+        lines ++ ["The proof proves different expression."]
+      else
+        lines
+
 main = do
   vdash <- getChar
   vdash <- getChar
@@ -581,18 +592,6 @@ main = do
   let linesStr = lines $ contents
   let nodes = createNodes $ map (calc . alexScanTokens) linesStr
 
-  --mapM_ (putStrLn . show) nodes
-
   let proof = annotate nodes
-
-  putStr "|-"
-  putStrLn (show target)
-  case (proof) of
-    Left lines -> mapM_ (putStrLn) lines
-    Right lines ->
-      if (Data.List.null nodes || (getExp (last nodes) /= target)) then do
-        mapM_ (putStrLn) lines
-        putStrLn "The proof proves different expression."
-      else
-        mapM_ (putStrLn) lines
-
+  putStrLn $ "|-" ++ (show target) ++ "\n" ++ 
+    (intercalate "\n" (proof2 target nodes proof))

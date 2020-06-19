@@ -79,6 +79,7 @@ data Exp
   | EInc Exp
   deriving (Eq, Ord)
 
+
 instance Show Exp where
   show (EImpl x y) = "(" ++ (show x) ++ "->" ++ (show y) ++ ")"
   show (EDisj x y) = "(" ++ (show x) ++ "|" ++ (show y) ++ ")"
@@ -93,6 +94,24 @@ instance Show Exp where
   show (EMul x y) = "(" ++ (show x) ++ "*" ++ (show y) ++ ")"
   show (EZero) = "0"
   show (EInc x) = (show x) ++ "\'"
+
+
+{-
+instance Show Exp where
+  show (EImpl x y) = "(" ++ (show x) ++ " -> " ++ (show y) ++ ")"
+  show (EDisj x y) = "(" ++ (show x) ++ " | " ++ (show y) ++ ")"
+  show (EConj x y) = "(" ++ (show x) ++ " & " ++ (show y) ++ ")"
+  show (ENeg x) = "!" ++ (show x) ++ ""
+  show (EForall x y) = "(@" ++ (show x) ++ "." ++ (show y) ++ ")"
+  show (EForany x y) = "(?" ++ (show x) ++ "." ++ (show y) ++ ")"
+  show (EVar s) = s
+  show (EPred s) = s
+  show (EEq x y) = "(" ++ (show x) ++ "=" ++ (show y) ++ ")"
+  show (EAdd x y) = "(" ++ (show x) ++ "+" ++ (show y) ++ ")"
+  show (EMul x y) = "(" ++ (show x) ++ "*" ++ (show y) ++ ")"
+  show (EZero) = "0"
+  show (EInc x) = (show x) ++ "\'"
+-}
 }
 
 
