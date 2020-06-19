@@ -4,8 +4,25 @@ import Parser
 import Lex
 import Data.List
 import Data.Char
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+
+
+
+isVarFree :: Exp -> String -> Bool
+isVarFree (EImpl x y) v = (isVarFree x v) || (isVarFree y v)
+isVarFree (EDisj x y) v = (isVarFree x v) || (isVarFree y v)
+isVarFree (EConj x y) v = (isVarFree x v) || (isVarFree y v)
+isVarFree (ENeg x) v = isVarFree x v
+isVarFree (EForall (EVar v1) x) v2 = if (v1 == v2) then False else isVarFree x v2
+isVarFree (EForany (EVar v1) x) v2 = if (v1 == v2) then False else isVarFree x v2
+isVarFree (EVar v1) v2 = v1 == v2
+isVarFree (EPred x) v = False
+isVarFree (EEq x y) v = (isVarFree x v) || (isVarFree y v)
+isVarFree (EAdd x y) v = (isVarFree x v) || (isVarFree y v)
+isVarFree (EMul x y) v = (isVarFree x v) || (isVarFree y v)
+isVarFree (EZero) v = False
+isVarFree (EInc x) v = isVarFree x v
 
 
 
@@ -306,16 +323,14 @@ isArithmAx8 _ = False
 
 isArithmAx9 :: Exp -> Bool
 isArithmAx9 (EImpl (EConj (a0) (EForall (EVar v) (EImpl a1 a2))) (a3)) =
-  do
-    let free = gatherFreeVars a3 Set.empty
-    if (Set.member v free) then
-      case (substituteFree v a3 EZero Set.empty Set.empty) of
+  if (isVarFree a3 v) then
+    case (substituteFree v a3 EZero Set.empty Set.empty) of
+      Left _ -> False
+      Right a0s -> case (substituteFree v a3 (EInc (EVar v)) (Set.singleton v) Set.empty) of
         Left _ -> False
-        Right a0s -> case (substituteFree v a3 (EInc (EVar v)) (Set.singleton v) Set.empty) of
-          Left _ -> False
-          Right a2s -> (a0 == a0s) && (a1 == a3) && (a2 == a2s)
-    else
-      False
+        Right a2s -> (a0 == a0s) && (a1 == a3) && (a2 == a2s)
+  else
+    False
 isArithmAx9 _ = False
 
 isMP :: Exp -> Exp -> Exp -> Bool
@@ -327,7 +342,7 @@ isMP _ _ _ = False
 isForallInjection :: Exp -> Exp -> Either String Bool
 isForallInjection (EImpl a0 b0) (EImpl a1 (EForall (EVar v) b1))
   | a0 == a1 && b0 == b1 = 
-    if (Set.member v (gatherFreeVars a0 Set.empty)) then
+    if (isVarFree a0 v) then
       Left ("variable " ++ v ++ " occurs free in ?@-rule.")
     else
       Right True
@@ -337,7 +352,7 @@ isForallInjection _ _ = Right False
 isForanyInjection :: Exp -> Exp -> Either String Bool
 isForanyInjection (EImpl a0 b0) (EImpl (EForany (EVar v) a1) b1)
   | a0 == a1 && b0 == b1 = 
-    if (Set.member v (gatherFreeVars b0 Set.empty)) then
+    if (isVarFree b0 v) then
       Left ("variable " ++ v ++ " occurs free in ?@-rule.")
     else
       Right True
@@ -352,69 +367,52 @@ instance Eq Node where
   (Node _ e1) == (Node _ e2) = e1 == e2
 
 instance Ord Node where
-  (Node _ e1) < (Node _ e2) = e1 < e2
-  (Node _ e1) <= (Node _ e2) = e1 <= e2
+  (Node i1 e1) < (Node i2 e2) = 
+    if (i1 < i2) then 
+      True
+    else if (i1 > i2) then
+      False
+    else 
+      e1 < e2
+  (Node i1 e1) <= (Node i2 e2) = 
+    if (i1 < i2) then
+      True
+    else if (i1 > i2) then
+      True
+    else e1 <= e2
 
 null :: Node
 null = Node (-1) EZero
 
-type DependencyMap = Map.Map Exp (Int, Int)
-
 data Pack = Pack { 
   getPrev :: Map.Map Exp Int, 
-  getMapImpl :: Map.Map Exp (Set.Set Node),
-  getMapMP :: DependencyMap}
+  getMapImpl :: Map.Map Exp (Set.Set Node)}
 
 empty :: Pack
-empty = Pack Map.empty Map.empty Map.empty
+empty = Pack Map.empty Map.empty
 
 annotate :: [Node] -> Either [String] [String]
 annotate [] = Right []
 annotate nodes =
   let 
-    safeInsert :: Exp -> (Int, Int) -> DependencyMap -> DependencyMap
-    safeInsert exp (pindex, index) mapMP =
-      case (Map.lookup exp mapMP) of
-        Just (index0, pindex0) ->
-          if (index0 < index || (index0 == index && pindex0 < pindex)) then
-            (Map.insert exp (index, pindex) mapMP)
-          else
-            mapMP
-        Nothing ->
-          (Map.insert exp (index, pindex) mapMP)
 
     nextPackImpl :: Node -> Pack -> Pack
-    nextPackImpl (Node index exp) (Pack prev mapImpl mapMP) =
+    nextPackImpl (Node index exp) (Pack prev mapImpl) =
       let
         newPrev = Map.insert exp index prev
       in
         case exp of
           (EImpl a b) ->
             let
-              newMapImpl = case (Map.lookup a mapImpl) of
-                Just set -> Map.insert a (Set.insert (Node index exp) set) mapImpl
-                Nothing -> Map.insert a (Set.singleton (Node index exp)) mapImpl
+              newMapImpl = case (Map.lookup b mapImpl) of
+                Just set -> Map.insert b (Set.insert (Node index exp) set) mapImpl
+                Nothing -> Map.insert b (Set.singleton (Node index exp)) mapImpl
             in
-              case (Map.lookup a prev) of
-                Just pindex -> 
-                  Pack newPrev newMapImpl (safeInsert b (index, pindex) mapMP)
-                Nothing -> (Pack newPrev newMapImpl mapMP)
-          _ -> Pack newPrev mapImpl mapMP
-          
-    nextPackExp :: Node -> Pack -> Pack
-    nextPackExp (Node index exp) (Pack prev mapImpl mapMP) =
-      case (Map.lookup exp mapImpl) of
-        Just set ->
-          let
-            newMapMP = Set.foldr' 
-              (\(Node pindex (EImpl exp texp)) s -> safeInsert texp (pindex, index) s)
-              mapMP set
-          in
-            Pack prev mapImpl newMapMP
-        Nothing -> Pack prev mapImpl mapMP
+              Pack newPrev newMapImpl
+          _ -> Pack newPrev mapImpl
         
     nextPack :: Node -> Pack -> Pack
-    nextPack node pack = nextPackExp node $ nextPackImpl node pack          
+    nextPack node pack = nextPackImpl node pack          
     
     helper :: [Node] -> Pack -> Either [String] [String]
     helper [] pack = Right []
@@ -481,11 +479,39 @@ annotate nodes =
             Right $ "[" ++ show index ++ ". Ax. A7] " ++ show exp
           else if (isArithmAx8 exp) then
             Right $ "[" ++ show index ++ ". Ax. A8] " ++ show exp
-          else case (Map.lookup exp (getMapMP newPack)) of
+          else case (lookupMP pack) of
             Just (i1, i2) -> 
               Right $ "[" ++ show index ++ ". M.P. " ++ show i1 ++
                 ", " ++ show i2 ++ "] " ++ show exp
             Nothing -> checkForanyInjection
+
+        lookupMP :: Pack -> Maybe (Int, Int)
+        lookupMP (Pack mapPrev mapImpl) =
+          let
+            helper :: (Map.Map Exp Int) -> (Set.Set Node) -> Maybe (Int, Int)
+            helper prev set =
+              let
+                update :: Maybe (Int, Int) -> Node -> Maybe (Int, Int)
+                update acc (Node j2 exp) =
+                  case (exp) of
+                    (EImpl a b) ->
+                      case (Map.lookup a prev) of
+                        Nothing -> acc
+                        Just i2 -> 
+                          case acc of
+                            Nothing -> Just (i2, j2)
+                            Just (i1, j1) ->
+                              if ((i2 > i1) || (i2 == i1) && (j2 > j1)) then
+                                Just (i2, j2)
+                              else
+                                Just (i1, j1)
+                    _ -> acc
+              in
+                Set.foldl' update Nothing set
+          in
+            case (Map.lookup exp mapImpl) of
+              Nothing -> Nothing
+              Just set -> helper mapPrev set
                               
         checkForanyInjection :: Either String String
         checkForanyInjection =  
@@ -513,7 +539,7 @@ annotate nodes =
         lookupForallInjection =
           case (exp) of
             (EImpl x (EForall (EVar v) y)) ->
-              case (Map.lookup (EImpl x y) (getPrev newPack)) of
+              case (Map.lookup (EImpl x y) (getPrev pack)) of
                 Just pindex -> 
                   case (isForallInjection (EImpl x y) exp) of
                     Left err -> Left err
@@ -528,7 +554,7 @@ annotate nodes =
         lookupForanyInjection = 
           case (exp) of
             (EImpl (EForany (EVar v) x) y) ->
-              case (Map.lookup (EImpl x y) (getPrev newPack)) of
+              case (Map.lookup (EImpl x y) (getPrev pack)) of
                 Just pindex -> 
                   case (isForanyInjection (EImpl x y) exp) of
                     Left err -> Left err
