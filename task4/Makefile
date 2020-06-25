@@ -2,7 +2,7 @@ all:
 	mkdir -p build
 	alex lex.x -o build/lex.hs
 	happy parser.y -o build/parser.hs
-	ghc -Wall -O2 -XBangPatterns build/lex.hs build/parser.hs utils.hs main.hs -odir build -hidir ifaces -o main
+	ghc -Wall -O2 -XBangPatterns build/lex.hs build/parser.hs utils.hs axioms.hs proofs.hs main.hs -odir build -hidir ifaces -o main
 
 pall:
 	mkdir -p build
