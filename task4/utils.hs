@@ -103,10 +103,8 @@ generateProof (EVar v) varmap =
   case (Map.lookup v varmap) of
     Just value -> 
       if (value) then 
-        --(True, [(EVar v)]) 
         (True, [])
       else 
-        --(False, [(ENeg (EVar v))])
         (False, [])
     Nothing -> error $ "Invalid variable map, no value for " ++ v
 
@@ -165,6 +163,30 @@ totalProof (gamma@(EVar name) : gammas) basicGammas varmap target =
         (EImpl (EDisj gamma (ENeg gamma)) target))
     , (EImpl (EDisj gamma (ENeg gamma)) target)
     , target ]
+{-
+totalProof ((ENeg gamma@(EVar name)) : gammas) basicGammas varmap target =
+  let
+    proofPos :: [Exp]
+    proofPos = totalProof gammas (gamma : basicGammas) (Map.insert name True varmap) target
+
+    proofNeg :: [Exp]
+    proofNeg = totalProof gammas ((ENeg gamma) : basicGammas) (Map.insert name False varmap) target
+
+  in
+    (deduct [gamma] basicGammas proofPos) ++
+    (deduct [(ENeg gamma)] basicGammas proofNeg) ++
+    proveThirdExcluded gamma ++
+    [ (EImpl
+        (EImpl gamma target)
+        (EImpl
+          (EImpl (ENeg gamma) target)
+          (EImpl (EDisj gamma (ENeg gamma)) target)))
+    , (EImpl
+        (EImpl (ENeg gamma) target)
+        (EImpl (EDisj gamma (ENeg gamma)) target))
+    , (EImpl (EDisj gamma (ENeg gamma)) target)
+    , target ]
 totalProof gammas _ _ target = 
   error $ "Invalid call of total proof, exp = " ++ show target ++ 
     ", gammas = " ++ show gammas
+-}

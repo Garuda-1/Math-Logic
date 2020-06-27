@@ -17,4 +17,4 @@ run:
 	./main
 
 zip:
-	zip task3.zip lex.x parser.y utils.hs main.hs Makefile
+	zip task4.zip lex.x parser.y utils.hs proofs.hs axioms.hs main.hs Makefile

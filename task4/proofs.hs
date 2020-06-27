@@ -7,8 +7,8 @@ import qualified Data.Set as Set
 
 
 
-proveSyllogism :: Exp -> [Exp]
-proveSyllogism exp =
+proveDuplication :: Exp -> [Exp]
+proveDuplication exp =
   [ (EImpl exp (EImpl exp exp))
   , (EImpl (EImpl exp (EImpl exp exp)) 
       (EImpl 
@@ -46,6 +46,41 @@ proveCounterposition (EImpl a b) =
     deduct gamma [] subproof
 proveCounterposition exp = 
   error $ "Invalid call of counterposition proof: " ++ show exp
+
+
+proveSyllogism :: Exp -> Exp -> [Exp]
+proveSyllogism (EImpl a b) (EImpl b1 c)
+  | (b == b1) =
+    let
+      gamma :: [Exp]
+      gamma = [a, (EImpl b c), (EImpl a b)]
+
+      subproof :: [Exp]
+      subproof =
+        [ a
+        , (EImpl a b)
+        , b
+        , (EImpl b c)
+        , c ]
+    in
+      deduct gamma [] subproof
+
+proveDoubleNeg :: Exp -> [Exp]
+proveDoubleNeg exp =
+  [ (EImpl exp (EImpl (ENeg exp) exp))
+  , (EImpl (ENeg exp) exp) ] ++
+  proveCounterposition (EImpl (ENeg exp) exp) ++
+  [ (EImpl (ENeg exp) (ENeg (ENeg exp))) ] ++
+  proveDuplication (ENeg exp) ++
+  [ (EImpl
+      (EImpl (ENeg exp) (ENeg exp))
+      (EImpl
+        (EImpl (ENeg exp) (ENeg (ENeg exp)))
+        (ENeg (ENeg exp))))
+  , (EImpl
+      (EImpl (ENeg exp) (ENeg (ENeg exp)))
+      (ENeg (ENeg exp)))
+  , (ENeg (ENeg exp)) ]
 
 
 data Pack = Pack { getPrev :: Set.Set Exp
@@ -97,7 +132,7 @@ deduct (hypothesis : gamma) gamma1 proof =
             , (EImpl exp (EImpl hypothesis exp))
             , (EImpl hypothesis exp) ]
           else if (exp == hypothesis) then
-            proveSyllogism exp
+            proveDuplication exp
           else case (isMP pack exp) of
             Just (a, b) ->
               [ (EImpl
@@ -121,15 +156,12 @@ deduct (hypothesis : gamma) gamma1 proof =
 proveAnd :: Exp -> Bool -> Exp -> Bool -> [Exp]
 proveAnd a av b bv 
   | av && bv =
-    --[ a
-    --, b
     [ (EImpl a (EImpl b (EConj a b)))
     , (EImpl b (EConj a b))
     , (EConj a b) ]
   | av && (not bv) =
     [ (EImpl (EConj a b) b)
     , (EImpl (ENeg b) (EImpl (EConj a b) (ENeg b)))
-    --, (ENeg b)
     , (EImpl (EConj a b) (ENeg b))
     , (EImpl 
         (EImpl (EConj a b) b) 
@@ -139,7 +171,6 @@ proveAnd a av b bv
   | (not av) && bv =
     [ (EImpl (EConj a b) a)
     , (EImpl (ENeg a) (EImpl (EConj a b) (ENeg a)))
-    --, (ENeg a)
     , (EImpl (EConj a b) (ENeg a))
     , (EImpl 
         (EImpl (EConj a b) a) 
@@ -149,7 +180,6 @@ proveAnd a av b bv
   | (not av) && (not bv) =
     [ (EImpl (EConj a b) a)
     , (EImpl (ENeg a) (EImpl (EConj a b) (ENeg a)))
-    --, (ENeg a)
     , (EImpl (EConj a b) (ENeg a))
     , (EImpl
         (EImpl (EConj a b) a) 
@@ -161,25 +191,58 @@ proveAnd a av b bv
 proveOr :: Exp -> Bool -> Exp -> Bool -> [Exp]
 proveOr a av b bv
   | av && bv =
-    --[ a
     [ (EImpl a (EDisj a b))
     , (EDisj a b) ]
   | av && (not bv) =
-    --[ a
     [ (EImpl a (EDisj a b))
     , (EDisj a b) ]
   | (not av) && bv =
-    --[ b
     [ (EImpl b (EDisj a b))
     , (EDisj a b) ]
   | (not av) && (not bv) =
-    error "TODO"
-
-
+    [ (EImpl (ENeg b) (EImpl (ENeg a) (ENeg b)))
+    , (EImpl (ENeg a) (ENeg b))] ++
+    proveCounterposition (EImpl (ENeg a) (ENeg b)) ++
+    [ (EImpl (ENeg (ENeg b)) (ENeg (ENeg a))) ] ++
+    proveSyllogism (EImpl (ENeg (ENeg b)) (ENeg (ENeg a))) 
+      (EImpl (ENeg (ENeg a)) a) ++
+    [ (EImpl
+        (EImpl (ENeg (ENeg a)) a)
+        (EImpl (ENeg (ENeg b)) a))
+    , (EImpl (ENeg (ENeg a)) a)
+    , (EImpl (ENeg (ENeg b)) a) ] ++
+    deduct [b] [a] (b : proveDoubleNeg b) ++
+    proveSyllogism (EImpl b (ENeg (ENeg b))) (EImpl (ENeg (ENeg b)) a) ++
+    [ (EImpl
+        (EImpl (ENeg (ENeg b)) a)
+        (EImpl b a))
+    , (EImpl b a)
+    , (EImpl
+        (EImpl a a)
+        (EImpl
+          (EImpl b a)
+          (EImpl (EDisj a b) a))) ] ++
+    proveDuplication a ++
+    [ (EImpl
+        (EImpl b a)
+        (EImpl (EDisj a b) a))
+    , (EImpl (EDisj a b) a)
+    , (EImpl (ENeg a) (EImpl (EDisj a b) (ENeg a)))
+    , (EImpl (EDisj a b) (ENeg a))
+    , (EImpl
+        (EImpl (EDisj a b) a)
+        (EImpl
+          (EImpl (EDisj a b) (ENeg a))
+          (ENeg (EDisj a b))))
+    , (EImpl
+        (EImpl (EDisj a b) (ENeg a))
+        (ENeg (EDisj a b)))
+    , (ENeg (EDisj a b)) ]
+   
+        
 proveImpl :: Exp -> Bool -> Exp -> Bool -> [Exp]
 proveImpl a av b bv
   | av && bv =
-    --[ b 
     [ (EImpl b (EImpl a b))
     , (EImpl a b) ]
   | av && (not bv) =
@@ -189,7 +252,7 @@ proveImpl a av b bv
 
       subproof :: [Exp]
       subproof = 
-        (proveSyllogism b) ++
+        (proveDuplication b) ++
         [ (EImpl a b)
         , (EImpl (EImpl a b) (EImpl (EImpl b b) (EImpl (EDisj a b) b)))
         , (EImpl (EImpl b b) (EImpl (EDisj a b) b))
@@ -212,7 +275,7 @@ proveImpl a av b bv
         , (ENeg (EImpl a b)) ]
     in
       deduct gamma [a, (ENeg b)] subproof ++
-      (proveSyllogism (EImpl a b)) ++
+      (proveDuplication (EImpl a b)) ++
       [ (EImpl
           (EImpl (EImpl a b) (EImpl a b))
           (EImpl 
@@ -223,7 +286,6 @@ proveImpl a av b bv
           (ENeg (EImpl a b)))
       , (ENeg (EImpl a b)) ]
   | (not av) && bv =
-    --[ b 
     [ (EImpl b (EImpl a b))
     , (EImpl a b) ]
   | (not av) && (not bv) =
@@ -257,21 +319,6 @@ proveImpl a av b bv
 proveNeg :: Exp -> Bool -> [Exp]
 proveNeg a av
   | av =
-    --[ a
-    [ (EImpl a (EImpl (ENeg a) a))
-    , (EImpl (ENeg a) a) ] ++
-    proveCounterposition (EImpl (ENeg a) a) ++
-    [ (EImpl (ENeg a) (ENeg (ENeg a))) ] ++
-    proveSyllogism (ENeg a) ++
-    [ (EImpl
-        (EImpl (ENeg a) (ENeg a))
-        (EImpl
-          (EImpl (ENeg a) (ENeg (ENeg a)))
-          (ENeg (ENeg a))))
-    , (EImpl
-        (EImpl (ENeg a) (ENeg (ENeg a)))
-        (ENeg (ENeg a)))
-    , (ENeg (ENeg a)) ]
+    proveDoubleNeg a
   | (not av) =
-    --[ (ENeg a) ]
     []
