@@ -47,7 +47,7 @@ proveCounterposition (EImpl a b) =
 proveCounterposition exp = 
   error $ "Invalid call of counterposition proof: " ++ show exp
 
-
+{-
 proveSyllogism :: Exp -> Exp -> [Exp]
 proveSyllogism (EImpl a b) (EImpl b1 c)
   | (b == b1) =
@@ -64,6 +64,7 @@ proveSyllogism (EImpl a b) (EImpl b1 c)
         , c ]
     in
       deduct gamma [] subproof
+-}
 
 proveDoubleNeg :: Exp -> [Exp]
 proveDoubleNeg exp =
@@ -200,6 +201,59 @@ proveOr a av b bv
     [ (EImpl b (EDisj a b))
     , (EDisj a b) ]
   | (not av) && (not bv) =
+    let 
+      gamma :: [Exp]
+      gamma = [a, (ENeg a)]
+  
+      subproof :: [Exp]
+      subproof =
+        [ a
+        , (EImpl a (EImpl (ENeg b) a))
+        , (EImpl (ENeg b) a)
+        , (ENeg a)
+        , (EImpl (ENeg a) (EImpl (ENeg b) (ENeg a)))
+        , (EImpl (ENeg b) (ENeg a))
+        , (EImpl
+            (EImpl (ENeg b) a)
+            (EImpl
+              (EImpl (ENeg b) (ENeg a))
+              (ENeg (ENeg b))))
+        , (EImpl
+            (EImpl (ENeg b) (ENeg a))
+            (ENeg (ENeg b)))
+        , (ENeg (ENeg b))
+        , (EImpl (ENeg (ENeg b)) b)
+        , b ]
+    in
+      deduct gamma [(ENeg b)] subproof ++
+      [ (EImpl (ENeg a) (EImpl a b))
+      , (EImpl a b) ] ++
+      proveDuplication b ++
+      [ (EImpl
+          (EImpl a b)
+          (EImpl
+            (EImpl b b)
+            (EImpl (EDisj a b) b)))
+      , (EImpl
+          (EImpl b b)
+          (EImpl (EDisj a b) b))
+      , (EImpl (EDisj a b) b)
+      , (EImpl
+          (ENeg b)
+          (EImpl
+            (EDisj a b)
+            (ENeg b)))
+      , (EImpl (EDisj a b) (ENeg b))
+      , (EImpl 
+          (EImpl (EDisj a b) b)
+          (EImpl 
+            (EImpl (EDisj a b) (ENeg b))
+            (ENeg (EDisj a b))))
+      , (EImpl 
+            (EImpl (EDisj a b) (ENeg b))
+            (ENeg (EDisj a b)))
+      , (ENeg (EDisj a b)) ]
+{-
     [ (EImpl (ENeg b) (EImpl (ENeg a) (ENeg b)))
     , (EImpl (ENeg a) (ENeg b))] ++
     proveCounterposition (EImpl (ENeg a) (ENeg b)) ++
@@ -238,7 +292,7 @@ proveOr a av b bv
         (EImpl (EDisj a b) (ENeg a))
         (ENeg (EDisj a b)))
     , (ENeg (EDisj a b)) ]
-   
+   -}
         
 proveImpl :: Exp -> Bool -> Exp -> Bool -> [Exp]
 proveImpl a av b bv
